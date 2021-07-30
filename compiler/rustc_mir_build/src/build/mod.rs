@@ -680,7 +680,9 @@ where
     let nil_arena = Arena::default();
     // This complains about nil_expr_hir: borrowed value does not live long enough
     // argument requires that `nil_expr_hir` is borrowed for `'tcx`
-    //let nil_expr_thir = build_thir(tcx, fn_def, &nil_arena, &nil_expr_hir);
+    let nil_expr_thir = build_thir(tcx, fn_def, &nil_arena, &nil_expr_hir);
+
+    // Not clear how to produce nil_lifetime
     let nil_kind_thir = ExprKind::Tuple { fields: &[] };
     let nil_expr_thir = Expr { temp_lifetime: nil_lifetime, ty: tcx.mk_unit(), span: nil_span, kind: nil_kind_thir };
     let new_body_expr = if is_spec(attrs) { nil_expr_thir } else { expr };
