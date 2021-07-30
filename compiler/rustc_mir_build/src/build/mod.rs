@@ -1,7 +1,8 @@
 use crate::build;
 use crate::build::scope::DropKind;
-use crate::thir::{build_thir, Arena, BindingMode, Expr, LintLevel, Pat, PatKind};
+use crate::thir::{build_thir, Arena, BindingMode, Expr, ExprKind, LintLevel, Pat, PatKind};
 use rustc_attr::{self as attr, UnwindAttr};
+use rustc_ast::{AttrKind, Attribute}; 
 use rustc_errors::ErrorReported;
 use rustc_hir as hir;
 use rustc_hir::def_id::{DefId, LocalDefId};
@@ -621,6 +622,25 @@ struct ArgInfo<'tcx>(
     Option<ImplicitSelfKind>,
 );
 
+fn is_spec(attrs: &[Attribute]) -> bool {
+    let mut ret = false;
+    for attr in attrs {
+        match &attr.kind {
+            AttrKind::Normal(item, _) => match &item.path.segments[..] {
+                [segment] => match (segment.ident.to_string()).as_str() {
+                    "spec" => ret = true,
+                    "proof" => ret = false,
+                    "exec" => ret = false,
+                    _ => {}
+                },
+                _ => {}
+            },
+            _ => {}
+        }
+    }
+    ret
+}
+
 fn construct_fn<'tcx, A>(
     infcx: &InferCtxt<'_, 'tcx>,
     fn_def: ty::WithOptConstParam<LocalDefId>,
@@ -642,6 +662,29 @@ where
     let tcx = infcx.tcx;
     let span = tcx.hir().span(fn_id);
 
+    let attrs = tcx.get_attrs(fn_def.did.to_def_id());
+    let new_return_ty = if is_spec(attrs) { tcx.mk_unit() } else { return_ty };
+
+    // One way to create the new body would involve creating an AST node, and then parsing it,
+    // and lowering it to (T)HIR.  But we don't have a parser or a LoweringContext handy at this
+    // point
+    // 
+    // let new_body_expr =  Parser.mk_expr(span, ExprKind::Tup([]), ThinVec::new());
+    
+    // Need to supply an HirId, but the standard way to do that is via LoweringContext::next_id
+    // So let's copy the function's HirId.  WARNING: Docs advise against this...
+    let nil_hir_id = fn_id;
+    let nil_kind = hir::ExprKind::Tup(&[]);
+    let nil_span = span_with_body;
+    let nil_expr_hir = hir::Expr{ hir_id: nil_hir_id, kind: nil_kind, span: nil_span };
+    let nil_arena = Arena::default();
+    // This complains about nil_expr_hir: borrowed value does not live long enough
+    // argument requires that `nil_expr_hir` is borrowed for `'tcx`
+    //let nil_expr_thir = build_thir(tcx, fn_def, &nil_arena, &nil_expr_hir);
+    let nil_kind_thir = ExprKind::Tuple { fields: &[] };
+    let nil_expr_thir = Expr { temp_lifetime: nil_lifetime, ty: tcx.mk_unit(), span: nil_span, kind: nil_kind_thir };
+    let new_body_expr = if is_spec(attrs) { nil_expr_thir } else { expr };
+
     let mut builder = Builder::new(
         infcx,
         fn_def,
@@ -649,7 +692,7 @@ where
         span_with_body,
         arguments.len(),
         safety,
-        return_ty,
+        new_return_ty,
         return_ty_span,
         body.generator_kind,
     );
@@ -672,7 +715,7 @@ where
                         fn_def.did.to_def_id(),
                         &arguments,
                         arg_scope,
-                        expr,
+                        new_body_expr,
                     )
                 }))
             }));
