@@ -1,6 +1,6 @@
 use crate::build;
 use crate::build::scope::DropKind;
-use crate::thir::{build_thir, Arena, BindingMode, Expr, ExprKind, LintLevel, Pat, PatKind};
+use crate::thir::{build_thir, Arena, BindingMode, Expr, LintLevel, Pat, PatKind};
 use rustc_attr::{self as attr, UnwindAttr};
 use rustc_ast::{AttrKind, Attribute}; 
 use rustc_errors::ErrorReported;
@@ -641,6 +641,12 @@ fn is_spec(attrs: &[Attribute]) -> bool {
     ret
 }
 
+//const nil_hir_id = HirId{ owner: LocalDefId { local_def_index: DefIndex { private: 0 } },
+//                                  local_id: ItemLocalId { private: 0 } };
+//const nil_span = Span { base_or_index: 0, len_or_tag: 0, ctxt_or_zero: 0 };
+//const nil_expr_hir = hir::Expr{ hir_id: nil_hir_id, kind: hir::ExprKind::Tup(&[]), span: nil_span };
+static mut NIL_EXPR_HIR:Option<hir::Expr<'_>> = None;
+
 fn construct_fn<'tcx, A>(
     infcx: &InferCtxt<'_, 'tcx>,
     fn_def: ty::WithOptConstParam<LocalDefId>,
@@ -673,18 +679,27 @@ where
     
     // Need to supply an HirId, but the standard way to do that is via LoweringContext::next_id
     // So let's copy the function's HirId.  WARNING: Docs advise against this...
-    let nil_hir_id = fn_id;
-    let nil_kind = hir::ExprKind::Tup(&[]);
-    let nil_span = span_with_body;
-    let nil_expr_hir = hir::Expr{ hir_id: nil_hir_id, kind: nil_kind, span: nil_span };
+
+    let nil_expr_hir = match &NIL_EXPR_HIR {
+        None => {
+            let nil_hir_id = fn_id;
+            let nil_kind = hir::ExprKind::Tup(&[]);
+            let nil_span = span_with_body;
+            let e = hir::Expr{ hir_id: nil_hir_id, kind: nil_kind, span: nil_span };
+            NIL_EXPR_HIR = Some(e.clone());  // Does not implement clone :(
+            e
+        },
+        Some(e) => *e, 
+    };
+
     let nil_arena = Arena::default();
     // This complains about nil_expr_hir: borrowed value does not live long enough
     // argument requires that `nil_expr_hir` is borrowed for `'tcx`
     let nil_expr_thir = build_thir(tcx, fn_def, &nil_arena, &nil_expr_hir);
-
-    // Not clear how to produce nil_lifetime
-    let nil_kind_thir = ExprKind::Tuple { fields: &[] };
-    let nil_expr_thir = Expr { temp_lifetime: nil_lifetime, ty: tcx.mk_unit(), span: nil_span, kind: nil_kind_thir };
+//
+//    // Not clear how to produce nil_lifetime
+//    let nil_kind_thir = ExprKind::Tuple { fields: &[] };
+//    let nil_expr_thir = Expr { temp_lifetime: nil_lifetime, ty: tcx.mk_unit(), span: nil_span, kind: nil_kind_thir };
     let new_body_expr = if is_spec(attrs) { nil_expr_thir } else { expr };
 
     let mut builder = Builder::new(
