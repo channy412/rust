@@ -645,7 +645,7 @@ fn is_spec(attrs: &[Attribute]) -> bool {
 //                                  local_id: ItemLocalId { private: 0 } };
 //const nil_span = Span { base_or_index: 0, len_or_tag: 0, ctxt_or_zero: 0 };
 //const nil_expr_hir = hir::Expr{ hir_id: nil_hir_id, kind: hir::ExprKind::Tup(&[]), span: nil_span };
-static mut NIL_EXPR_HIR:Option<hir::Expr<'_>> = None;
+//static mut NIL_EXPR_HIR:Option<hir::Expr<'_>> = None;
 
 fn construct_fn<'tcx, A>(
     infcx: &InferCtxt<'_, 'tcx>,
@@ -671,36 +671,48 @@ where
     let attrs = tcx.get_attrs(fn_def.did.to_def_id());
     let new_return_ty = if is_spec(attrs) { tcx.mk_unit() } else { return_ty };
 
-    // One way to create the new body would involve creating an AST node, and then parsing it,
-    // and lowering it to (T)HIR.  But we don't have a parser or a LoweringContext handy at this
-    // point
-    // 
-    // let new_body_expr =  Parser.mk_expr(span, ExprKind::Tup([]), ThinVec::new());
-    
-    // Need to supply an HirId, but the standard way to do that is via LoweringContext::next_id
-    // So let's copy the function's HirId.  WARNING: Docs advise against this...
-
-    let nil_expr_hir = match &NIL_EXPR_HIR {
-        None => {
-            let nil_hir_id = fn_id;
-            let nil_kind = hir::ExprKind::Tup(&[]);
-            let nil_span = span_with_body;
-            let e = hir::Expr{ hir_id: nil_hir_id, kind: nil_kind, span: nil_span };
-            NIL_EXPR_HIR = Some(e.clone());  // Does not implement clone :(
-            e
-        },
-        Some(e) => *e, 
-    };
-
-    let nil_arena = Arena::default();
-    // This complains about nil_expr_hir: borrowed value does not live long enough
-    // argument requires that `nil_expr_hir` is borrowed for `'tcx`
-    let nil_expr_thir = build_thir(tcx, fn_def, &nil_arena, &nil_expr_hir);
+    if is_spec(attrs) {
+        println!("Function {} is spec ", tcx.def_path_debug_str(fn_def.did.to_def_id()));
+    } else {
+        println!("Function {} is not spec ", tcx.def_path_debug_str(fn_def.did.to_def_id()));
+    }
+//    // One way to create the new body would involve creating an AST node, and then parsing it,
+//    // and lowering it to (T)HIR.  But we don't have a parser or a LoweringContext handy at this
+//    // point
+//    // 
+//    // let new_body_expr =  Parser.mk_expr(span, ExprKind::Tup([]), ThinVec::new());
+//    
+//    // Need to supply an HirId, but the standard way to do that is via LoweringContext::next_id
+//    // So let's copy the function's HirId.  WARNING: Docs advise against this...
 //
-//    // Not clear how to produce nil_lifetime
-//    let nil_kind_thir = ExprKind::Tuple { fields: &[] };
-//    let nil_expr_thir = Expr { temp_lifetime: nil_lifetime, ty: tcx.mk_unit(), span: nil_span, kind: nil_kind_thir };
-    let new_body_expr = if is_spec(attrs) { nil_expr_thir } else { expr };
+//    let nil_hir_id = fn_id;
+//    let nil_kind = hir::ExprKind::Tup(&[]);
+//    let nil_span = span_with_body;
+//    let e = hir::Expr{ hir_id: nil_hir_id, kind: nil_kind, span: nil_span };
+//    let mut nil_expr_hir:hir::Expr<'static> = Box::leak(Box::new(e));
+//    /*
+//    let nil_expr_hir = match &NIL_EXPR_HIR {
+//        None => {
+//            let nil_hir_id = fn_id;
+//            let nil_kind = hir::ExprKind::Tup(&[]);
+//            let nil_span = span_with_body;
+//            let e = hir::Expr{ hir_id: nil_hir_id, kind: nil_kind, span: nil_span };
+//            NIL_EXPR_HIR = Some(e.clone());  // Does not implement clone :(
+//            e
+//        },
+//        Some(e) => *e, 
+//    };
+//    */
+//
+//    let nil_arena = Arena::default();
+//    // This complains about nil_expr_hir: borrowed value does not live long enough
+//    // argument requires that `nil_expr_hir` is borrowed for `'tcx`
+//    let nil_expr_thir = build_thir(tcx, fn_def, &nil_arena, &nil_expr_hir);
+////
+////    // Not clear how to produce nil_lifetime
+////    let nil_kind_thir = ExprKind::Tuple { fields: &[] };
+////    let nil_expr_thir = Expr { temp_lifetime: nil_lifetime, ty: tcx.mk_unit(), span: nil_span, kind: nil_kind_thir };
+//    let new_body_expr = if is_spec(attrs) { nil_expr_thir } else { expr };
 
     let mut builder = Builder::new(
         infcx,
@@ -732,7 +744,7 @@ where
                         fn_def.did.to_def_id(),
                         &arguments,
                         arg_scope,
-                        new_body_expr,
+                        expr,
                     )
                 }))
             }));
@@ -1076,7 +1088,34 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             self.source_scope = source_scope;
         }
 
-        self.expr_into_dest(Place::return_place(), block, &expr)
+        let attrs = tcx.get_attrs(self.def_id);
+
+        if is_spec(attrs) {
+            // From expr_into_dest:
+            let expr_span = expr.span;
+            let source_info = self.source_info(expr_span);
+/*
+            // as_local_rvalue
+            let local_scope = self.local_scope();
+            self.as_rvalue(block, Some(local_scope), expr);
+
+            // as_rvalue
+
+            let fields: Vec<_> = fields
+                    .into_iter()
+                    .map(|f| unpack!(block = this.as_operand(block, scope, f)))
+                    .collect();
+            block.and(Rvalue::Aggregate(box AggregateKind::Tuple, vec![]))
+
+            // From expr_into_dest:
+            let rvalue = unpack!(block = self.as_local_rvalue(block, expr));
+*/
+            let rvalue = unpack!(block = block.and(Rvalue::Aggregate(box AggregateKind::Tuple, vec![])));
+            self.cfg.push_assign(block, source_info, Place::return_place() /* destination */, rvalue);
+            block.unit()
+        } else {
+            self.expr_into_dest(Place::return_place(), block, &expr)
+        }
     }
 
     fn set_correct_source_scope_for_arg(
