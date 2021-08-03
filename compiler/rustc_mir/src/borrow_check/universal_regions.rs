@@ -629,7 +629,19 @@ impl<'cx, 'tcx> UniversalRegionsBuilder<'cx, 'tcx> {
             DefiningTy::FnDef(def_id, _) => {
                 let sig = tcx.fn_sig(def_id);
                 let sig = indices.fold_to_region_vids(tcx, sig);
-                sig.inputs_and_output()
+                if is_spec(def_id) {
+                    //let nil_binder = Binder::dummy(tcx.mk_unit());
+                    let inputs = sig.inputs().skip_binder();
+                    let new_io = inputs + [tcx.mk_unit()];
+                    let new_binder = sig.rebind(new_io);
+
+
+                    let new_io = sig.inputs() + [tcx.mk_unit()];
+                    //sig.map_bound_ref(|fn_sig| fn_sig.inputs_and_output)    // from rustc_middle/ty/sty.rs: inputs_and_output
+                    new_io
+                } else {
+                    sig.inputs_and_output()
+                }
             }
 
             DefiningTy::Const(def_id, _) => {
