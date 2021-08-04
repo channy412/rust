@@ -14,6 +14,7 @@
 
 use either::Either;
 use rustc_data_structures::fx::FxHashMap;
+use rustc_ast::{AttrKind, Attribute};
 use rustc_errors::DiagnosticBuilder;
 use rustc_hir as hir;
 use rustc_hir::def_id::{DefId, LocalDefId};
@@ -395,6 +396,27 @@ struct UniversalRegionsBuilder<'cx, 'tcx> {
 
 const FR: NllRegionVariableOrigin = NllRegionVariableOrigin::FreeRegion;
 
+#[allow(dead_code)]
+fn is_spec(attrs: &[Attribute]) -> bool {
+    let mut ret = false;
+    for attr in attrs {
+        match &attr.kind {
+            AttrKind::Normal(item, _) => match &item.path.segments[..] {
+                [segment] => match (segment.ident.to_string()).as_str() {
+                    "spec" => ret = true,
+                    "proof" => ret = false,
+                    "exec" => ret = false,
+                    _ => {}
+                },
+                _ => {}
+            },
+            _ => {}
+        }
+    }
+    ret
+}
+
+
 impl<'cx, 'tcx> UniversalRegionsBuilder<'cx, 'tcx> {
     fn build(self) -> UniversalRegions<'tcx> {
         debug!("build(mir_def={:?})", self.mir_def);
@@ -629,19 +651,32 @@ impl<'cx, 'tcx> UniversalRegionsBuilder<'cx, 'tcx> {
             DefiningTy::FnDef(def_id, _) => {
                 let sig = tcx.fn_sig(def_id);
                 let sig = indices.fold_to_region_vids(tcx, sig);
-                if is_spec(def_id) {
-                    //let nil_binder = Binder::dummy(tcx.mk_unit());
-                    let inputs = sig.inputs().skip_binder();
-                    let new_io = inputs + [tcx.mk_unit()];
-                    let new_binder = sig.rebind(new_io);
-
-
-                    let new_io = sig.inputs() + [tcx.mk_unit()];
-                    //sig.map_bound_ref(|fn_sig| fn_sig.inputs_and_output)    // from rustc_middle/ty/sty.rs: inputs_and_output
-                    new_io
-                } else {
-                    sig.inputs_and_output()
-                }
+                //let attrs = tcx.get_attrs(def_id);
+//                if is_spec(attrs) {
+//                    let inputs = sig.inputs().skip_binder();
+//                    // let bound_vars = sig.inputs().bound_vars();   // For most recent version of rustc
+//                    let inputs_and_output = [inputs, &[tcx.mk_unit()]].concat();
+//                    //let inputs_and_output = inputs.join(tcx.mk_unit());
+//                    //let inputs_and_output = *inputs + [tcx.mk_unit()];
+//                    let new_io = ty::Binder::bind(inputs_and_output);
+//                    // let new_io = ty::Binder::bind_with_vars(inputs_and_output, bound_vars);
+//                    // let new_io = ty::Binder::bind_with_vars(inputs_and_output, bound_vars);  // For most recent version of rustc
+//                    new_io
+////
+////
+////                    //let nil_binder = Binder::dummy(tcx.mk_unit());
+////                    let inputs = sig.inputs().skip_binder();
+////                    let new_io = inputs + [tcx.mk_unit()];
+////                    let new_binder = sig.rebind(new_io);
+////
+////
+////                    let new_io = sig.inputs() + [tcx.mk_unit()];
+////                    //sig.map_bound_ref(|fn_sig| fn_sig.inputs_and_output)    // from rustc_middle/ty/sty.rs: inputs_and_output
+////                    new_io
+//                } else {
+//                    sig.inputs_and_output()
+//                }
+                  sig.inputs_and_output()
             }
 
             DefiningTy::Const(def_id, _) => {
