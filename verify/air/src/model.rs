@@ -9,7 +9,8 @@ use z3::ast::Dynamic;
 pub struct Model<'a> {
     z3_model: z3::Model<'a>,
     id_snapshots: SnapShots,
-    value_snapshots: HashMap<Ident, HashMap<Ident, String>>,
+    // TODO: Expose via a more abstract interface
+    pub value_snapshots: HashMap<Ident, HashMap<Ident, String>>,
 }
 
 impl<'a> Model<'a> {
