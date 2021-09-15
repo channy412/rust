@@ -10,7 +10,7 @@ use crate::util::{
 };
 use crate::{unsupported, unsupported_err, unsupported_err_unless, unsupported_unless};
 use air::ast::{Binder, BinderX, Ident, Quant};
-use rustc_ast::{Attribute, LitKind};
+use rustc_ast::{Attribute, BorrowKind, LitKind, Mutability};
 use rustc_hir::def::{DefKind, Res};
 use rustc_hir::{
     Arm, BinOpKind, BindingAnnotation, Block, Destination, Expr, ExprKind, Local, LoopSource,
@@ -219,6 +219,7 @@ fn fn_call_to_vir<'tcx>(
     let is_decreases = hack_check_def_name(tcx, f, "builtin", "decreases");
     let is_forall = hack_check_def_name(tcx, f, "builtin", "forall");
     let is_exists = hack_check_def_name(tcx, f, "builtin", "exists");
+    let is_equal = hack_check_def_name(tcx, f, "builtin", "equal");
     let is_hide = hack_check_def_name(tcx, f, "builtin", "hide");
     let is_reveal = hack_check_def_name(tcx, f, "builtin", "reveal");
     let is_reveal_fuel = hack_check_def_name(tcx, f, "builtin", "reveal_with_fuel");
@@ -235,7 +236,7 @@ fn fn_call_to_vir<'tcx>(
     let is_spec = is_admit || is_requires || is_ensures || is_invariant || is_decreases;
     let is_quant = is_forall || is_exists;
     let is_directive = is_hide || is_reveal || is_reveal_fuel;
-    let is_cmp = is_eq || is_ne || is_le || is_ge || is_lt || is_gt;
+    let is_cmp = is_equal || is_eq || is_ne || is_le || is_ge || is_lt || is_gt;
     let is_arith_binary = is_add || is_sub || is_mul;
     record_fun(&bctx.ctxt, fun.span, f, is_spec || is_quant || is_directive, is_implies);
 
@@ -295,7 +296,9 @@ fn fn_call_to_vir<'tcx>(
 
     let mut vir_args = vec_map_result(&args, |arg| expr_to_vir(bctx, arg))?;
 
-    let is_smt_binary = if is_eq || is_ne {
+    let is_smt_binary = if is_equal {
+        true
+    } else if is_eq || is_ne {
         is_smt_equality(bctx, expr.span, &args[0].hir_id, &args[1].hir_id)
     } else if is_cmp || is_arith_binary || is_implies {
         is_smt_arith(bctx, &args[0].hir_id, &args[1].hir_id)
@@ -321,7 +324,7 @@ fn fn_call_to_vir<'tcx>(
         unsupported_err_unless!(len == 2, expr.span, "expected binary op", args);
         let lhs = vir_args[0].clone();
         let rhs = vir_args[1].clone();
-        let vop = if is_eq {
+        let vop = if is_eq || is_equal {
             BinaryOp::Eq
         } else if is_ne {
             BinaryOp::Ne
@@ -349,15 +352,12 @@ fn fn_call_to_vir<'tcx>(
     } else {
         let fun_ty = bctx.types.node_type(fun.hir_id);
         let (param_typs, ret_typ) = match fun_ty.kind() {
-            TyKind::FnDef(def_id, _substs) => match tcx.fn_sig(*def_id).no_bound_vars() {
-                None => unsupported_err!(expr.span, format!("found bound vars in function"), expr),
-                Some(f) => {
-                    let params: Vec<Typ> =
-                        f.inputs().iter().map(|t| mid_ty_to_vir(tcx, *t)).collect();
-                    let ret = mid_ty_to_vir_opt(tcx, f.output());
-                    (params, ret)
-                }
-            },
+            TyKind::FnDef(def_id, _substs) => {
+                let f = tcx.fn_sig(*def_id).skip_binder();
+                let params: Vec<Typ> = f.inputs().iter().map(|t| mid_ty_to_vir(tcx, *t)).collect();
+                let ret = mid_ty_to_vir_opt(tcx, f.output());
+                (params, ret)
+            }
             _ => {
                 unsupported_err!(expr.span, format!("call to non-FnDef function"), expr)
             }
@@ -537,10 +537,16 @@ pub(crate) fn expr_to_vir_inner<'tcx>(
             }
         },
         ExprKind::Cast(source, _) => Ok(mk_ty_clip(&expr_typ, &expr_to_vir(bctx, source)?)),
+        ExprKind::AddrOf(BorrowKind::Ref, Mutability::Not, e) => {
+            return expr_to_vir_inner(bctx, e);
+        }
         ExprKind::Unary(op, arg) => {
             let varg = expr_to_vir(bctx, arg)?;
             let vop = match op {
                 UnOp::Not => UnaryOp::Not,
+                UnOp::Deref => {
+                    return expr_to_vir_inner(bctx, arg);
+                }
                 _ => {
                     unsupported_err!(expr.span, "unary expression", expr)
                 }

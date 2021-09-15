@@ -292,6 +292,7 @@ pub type Variants = Binders<Fields>;
 pub struct DatatypeX {
     pub path: Path,
     pub visibility: Visibility,
+    pub is_no_verify: bool,
     pub variants: Variants,
 }
 pub type Datatype = Arc<Spanned<DatatypeX>>;

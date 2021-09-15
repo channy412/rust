@@ -49,6 +49,12 @@ pub fn exists<A>(_a: A) -> bool {
     unimplemented!();
 }
 
+/// SMT equality (two values appear equal to the SMT solver)
+/// TODO: the mode checker should restrict this to #[spec] only, since we can't compile it
+pub fn equal<A>(_: A, _: A) -> bool {
+    unimplemented!();
+}
+
 #[allow(non_camel_case_types)]
 pub struct int;
 

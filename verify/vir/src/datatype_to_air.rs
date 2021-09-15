@@ -29,8 +29,17 @@ fn datatype_to_air(datatype: &crate::ast::Datatype) -> air::ast::Datatype {
 
 pub fn datatypes_to_air(datatypes: &crate::ast::Datatypes) -> Commands {
     let mut commands: Vec<Command> = Vec::new();
+    let (datatypes_no_verify, datatypes_verify): (
+        Vec<&crate::ast::Datatype>,
+        Vec<&crate::ast::Datatype>,
+    ) = datatypes.iter().partition(|d| d.x.is_no_verify);
+    for datatype in datatypes_no_verify {
+        commands.push(Arc::new(CommandX::Global(Arc::new(DeclX::Sort(path_to_air_ident(
+            &datatype.x.path,
+        ))))));
+    }
     let air_datatypes =
-        datatypes.iter().map(|datatype| datatype_to_air(datatype)).collect::<Vec<_>>();
+        datatypes_verify.iter().map(|datatype| datatype_to_air(datatype)).collect::<Vec<_>>();
     commands.push(Arc::new(CommandX::Global(Arc::new(DeclX::Datatypes(Arc::new(air_datatypes))))));
     for datatype in datatypes.iter() {
         let decl_type_id = Arc::new(DeclX::Const(

@@ -1,9 +1,10 @@
 use crate::context::Context;
 use crate::rust_to_vir_base::{
-    check_generics, def_id_to_vir_path, get_mode, hack_get_def_name, ty_to_vir,
+    check_generics, def_id_to_vir_path, get_mode, get_verifier_attrs, hack_get_def_name, ty_to_vir,
 };
 use crate::unsupported_unless;
 use crate::util::spanned_new;
+use rustc_ast::Attribute;
 use rustc_hir::{EnumDef, Generics, ItemId, VariantData};
 use rustc_span::Span;
 use std::sync::Arc;
@@ -64,6 +65,7 @@ pub fn check_item_struct<'tcx>(
     span: Span,
     id: &ItemId,
     visibility: vir::ast::Visibility,
+    attrs: &[Attribute],
     variant_data: &'tcx VariantData<'tcx>,
     generics: &'tcx Generics<'tcx>,
 ) -> Result<(), VirErr> {
@@ -72,7 +74,9 @@ pub fn check_item_struct<'tcx>(
     let path = def_id_to_vir_path(ctxt.tcx, id.def_id.to_def_id());
     let variant_name = variant_ident(&name, &name);
     let variants = Arc::new(vec![check_variant_data(ctxt, &variant_name, variant_data)]);
-    vir.datatypes.push(spanned_new(span, DatatypeX { path, visibility, variants }));
+    let vattrs = get_verifier_attrs(attrs)?;
+    let is_no_verify = !vattrs.do_verify;
+    vir.datatypes.push(spanned_new(span, DatatypeX { path, visibility, is_no_verify, variants }));
     Ok(())
 }
 
@@ -82,6 +86,7 @@ pub fn check_item_enum<'tcx>(
     span: Span,
     id: &ItemId,
     visibility: vir::ast::Visibility,
+    attrs: &[Attribute],
     enum_def: &'tcx EnumDef<'tcx>,
     generics: &'tcx Generics<'tcx>,
 ) -> Result<(), VirErr> {
@@ -102,6 +107,8 @@ pub fn check_item_enum<'tcx>(
             })
             .collect::<Vec<_>>(),
     );
-    vir.datatypes.push(spanned_new(span, DatatypeX { path, visibility, variants }));
+    let vattrs = get_verifier_attrs(attrs)?;
+    let is_no_verify = !vattrs.do_verify;
+    vir.datatypes.push(spanned_new(span, DatatypeX { path, visibility, is_no_verify, variants }));
     Ok(())
 }

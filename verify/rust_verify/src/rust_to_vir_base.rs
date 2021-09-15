@@ -330,6 +330,9 @@ pub(crate) fn mid_ty_to_vir<'tcx>(tcx: TyCtxt<'tcx>, ty: rustc_middle::ty::Ty) -
         }
         TyKind::Uint(_) | TyKind::Int(_) => TypX::Int(mk_range(ty)),
         TyKind::Param(param) => TypX::TypParam(Arc::new(param.name.to_string())),
+        TyKind::Ref(_, ty, rustc_ast::Mutability::Not) => {
+            return mid_ty_to_vir(tcx, ty);
+        }
         _ => {
             unsupported!(format!("type {:?}", ty))
         }
@@ -395,6 +398,9 @@ pub(crate) fn ty_to_vir<'tcx>(tcx: TyCtxt<'tcx>, ty: &Ty) -> Typ {
                 unsupported!(format!("type {:#?} {:?} {:?}", kind, path.res, span))
             }
         },
+        rustc_hir::TyKind::Rptr(_, rustc_hir::MutTy { ty, mutbl: rustc_ast::Mutability::Not }) => {
+            return ty_to_vir(tcx, ty);
+        }
         _ => {
             unsupported!(format!("type {:#?} {:?}", kind, span))
         }
