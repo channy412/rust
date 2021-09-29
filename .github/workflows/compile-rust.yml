@@ -1,25 +1,35 @@
-name: Rust for Dust
+# action.yml
+name: 'Build Rust'
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
 
-on: [push]
 
-jobs:
-  build_and_save:
-    runs-on: ubuntu-18.04     # ubuntu-latest  is same with  # ubuntu-20.04   
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
-      - name: rustc build 
-        run: |
-          cp config.toml.verify config.toml
-          python x.py dist
 
-      - name: Archive production artifacts
-        uses: actions/upload-artifact@v2
-        with:
-          name: dist-without-markdown
-          path: |
-            dist
-            !dist/**/*.md        
+
+
+# name: Rust for Dust
+
+# on: [push]
+
+# jobs:
+#   build_and_save:
+#     runs-on: ubuntu-18.04     # ubuntu-latest  is same with  # ubuntu-20.04   
+#     steps:
+#       - name: Checkout repository
+#         uses: actions/checkout@v2
+#       - name: rustc build 
+#         run: |
+#           cp config.toml.verify config.toml
+#           python x.py dist
+
+#       - name: Archive production artifacts
+#         uses: actions/upload-artifact@v2
+#         with:
+#           name: dist-without-markdown
+#           path: |
+#             dist
+#             !dist/**/*.md        
 
       # - name: Archive code coverage results
       #   uses: actions/upload-artifact@v2

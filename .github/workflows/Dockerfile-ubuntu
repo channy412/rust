@@ -1,0 +1,55 @@
+# copied from https://github.com/dockerfile/ubuntu/blob/master/Dockerfile
+
+
+#
+# Ubuntu Dockerfile
+#
+# https://github.com/dockerfile/ubuntu
+#
+
+# Pull base image.
+FROM ubuntu:18.04
+
+# Install.
+RUN \
+  sed -i 's/# \(.*multiverse$\)/\1/g' /etc/apt/sources.list && \
+  apt-get update && \
+  apt-get -y upgrade && \
+  apt-get install -y build-essential && \
+  apt-get install -y software-properties-common && \
+  apt-get install -y byobu curl git htop man unzip vim wget && \
+# the following line is added now for rustc
+  apt-get install -y ninja ssl pkg-config && \    
+  rm -rf /var/lib/apt/lists/*
+
+# Add files.
+ADD root/.bashrc /root/.bashrc
+ADD root/.gitconfig /root/.gitconfig
+ADD root/.scripts /root/.scripts
+
+# Set environment variables.
+ENV HOME /root
+
+# Define working directory.
+WORKDIR /root
+
+# Define default command.
+CMD ["bash"]
+
+
+
+
+
+# from rust github README:
+    # Make sure you have installed the dependencies:
+
+    #     g++ 5.1 or later or clang++ 3.5 or later
+    #     python 3 or 2.7
+    #     GNU make 3.81 or later
+    #     cmake 3.13.4 or later
+    #     ninja
+    #     curl
+    #     git
+    #     ssl which comes in libssl-dev or openssl-devel
+    #     pkg-config if you are compiling on Linux and targeting Linux
+
