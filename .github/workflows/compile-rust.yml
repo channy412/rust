@@ -1,4 +1,5 @@
 # action.yml
+on: [push]
 name: 'Build Rust'
 runs:
   using: 'docker'
