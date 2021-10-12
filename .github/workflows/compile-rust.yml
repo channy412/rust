@@ -1,24 +1,28 @@
-name: Rust for Dust
+name: build and upload binary of custom rust
+
+# possible way -> take argument asking whether you want to compile rust or not 
 
 on: [push]
 
 jobs:
   build_and_save:
-    runs-on: ubuntu-20.04     # ubuntu-latest  is same with  # ubuntu-20.04   
+    runs-on: [self-hosted, linux]    
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
-      - name: rustc build 
+      - name: build and install
         run: |
-          python x.py dist
+        cp config.toml.verify config.toml
+        python x.py install
+        cp -r install ~/local_bin
+                  # ln -sf ./install ~/local_bin/install
 
-      - name: Archive production artifacts
+      - name: upload artifacts
         uses: actions/upload-artifact@v2
         with:
           name: dist-without-markdown
           path: |
-            dist
-            !dist/**/*.md        
+            install          
 
 
 
